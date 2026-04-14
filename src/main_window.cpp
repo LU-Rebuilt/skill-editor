@@ -936,7 +936,7 @@ void MainWindow::on_search_changed(const QString& text) {
 void MainWindow::on_open_file() {
     QString path = qt_common::FileBrowserDialog::getOpenFileName(
         this, "Open CDClient Database", {},
-        "CDClient (*.sqlite *.db *.fdb);;All Files (*)");
+        "SQLite Database (*.sqlite *.db);;All Files (*)");
     if (path.isEmpty()) return;
     load_database(path.toStdString());
 }
