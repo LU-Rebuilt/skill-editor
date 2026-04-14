@@ -61,6 +61,7 @@ struct CdClientData {
     std::vector<SkillBehavior> skills;
     std::unordered_map<int, std::string> skill_names;              // skillID → display name from locale.xml
     std::unordered_map<int, std::vector<ObjectSkill>> skill_objects; // skillID → objects that use it
+    std::unordered_map<int, std::vector<ObjectSkill>> object_skills; // LOT → skills assigned to it
     std::unordered_map<int, std::string> object_names;             // LOT → display name from Objects table
 
     // Helpers
@@ -167,6 +168,18 @@ void insert_skill_raw(CdClientData& data, const std::string& db_path,
 // Delete a single parameter from a behavior (not all params).
 void delete_parameter(CdClientData& data, const std::string& db_path,
                       int behavior_id, const std::string& parameter_id);
+
+// Insert an object-skill assignment into the database and in-memory data.
+void insert_object_skill(CdClientData& data, const std::string& db_path,
+                         const ObjectSkill& os);
+
+// Delete an object-skill assignment from the database and in-memory data.
+void delete_object_skill(CdClientData& data, const std::string& db_path,
+                         int object_template, int skill_id);
+
+// Update the castOnType for an object-skill assignment.
+void update_object_skill_cast_type(CdClientData& data, const std::string& db_path,
+                                   int object_template, int skill_id, int new_cast_on_type);
 
 // Save a subtree as a named JSON template file.
 void save_template(const CdClientData& data, int root_behavior_id,

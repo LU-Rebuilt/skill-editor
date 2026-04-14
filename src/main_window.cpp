@@ -97,6 +97,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::RightDockWidgetArea, undo_dock_);
     undo_dock_->hide();
 
+    object_skills_panel_ = new ObjectSkillsPanel;
+
     auto* edit_menu = menuBar()->addMenu("&Edit");
     QAction* undo_action = undo_stack_->createUndoAction(this, "&Undo");
     undo_action->setShortcut(QKeySequence::Undo);
@@ -193,9 +195,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto* main_splitter = new QSplitter(Qt::Horizontal);
     setCentralWidget(main_splitter);
 
-    // Left panel: search + skill list
-    auto* left_widget = new QWidget;
-    auto* left_layout = new QVBoxLayout(left_widget);
+    // Left panel: skill list (top) + object skills (bottom) in a vertical splitter
+    auto* left_splitter = new QSplitter(Qt::Vertical);
+
+    auto* skill_list_widget = new QWidget;
+    auto* left_layout = new QVBoxLayout(skill_list_widget);
     left_layout->setContentsMargins(4, 4, 4, 4);
 
     auto* left_label = new QLabel("Skills");
@@ -281,7 +285,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         menu.exec(skill_list_->mapToGlobal(pos));
     });
 
-    main_splitter->addWidget(left_widget);
+    left_splitter->addWidget(skill_list_widget);
+    left_splitter->addWidget(object_skills_panel_);
+    left_splitter->setSizes({400, 400});
+    main_splitter->addWidget(left_splitter);
 
     // Center: graph view
     tree_scene_ = new TreeScene(this);
@@ -516,6 +523,75 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         }
     });
 
+    // Object skills panel signals
+    connect(object_skills_panel_, &ObjectSkillsPanel::navigate_to_skill,
+            this, [this](int skill_id) {
+        // Select and load the skill in the main editor
+        for (int i = 0; i < skill_list_->count(); ++i) {
+            auto* item = skill_list_->item(i);
+            if (item->data(Qt::UserRole).toInt() == skill_id) {
+                skill_list_->setCurrentItem(item);
+                load_skill(skill_id);
+                break;
+            }
+        }
+    });
+
+    connect(object_skills_panel_, &ObjectSkillsPanel::object_skill_added,
+            this, [this, refresh_cb](int object_template, int skill_id, int cast_on_type) {
+        if (db_path_.empty()) return;
+        try {
+            auto* cmd = new AddObjectSkillCommand(
+                data_, db_path_, object_template, skill_id, cast_on_type, refresh_cb);
+            undo_stack_->push(cmd);
+            object_skills_panel_->refresh();
+            // Also refresh the node editor's "Used By" section if viewing this skill
+            if (current_skill_id_ == skill_id)
+                node_editor_->show_skill_objects(skill_id, data_);
+            statusBar()->showMessage(
+                QString("Added skill %1 to LOT %2").arg(skill_id).arg(object_template));
+        } catch (const std::exception& e) {
+            QMessageBox::warning(this, "Error", e.what());
+        }
+    });
+
+    connect(object_skills_panel_, &ObjectSkillsPanel::object_skill_removed,
+            this, [this, refresh_cb](int object_template, int skill_id) {
+        if (db_path_.empty()) return;
+        try {
+            auto* cmd = new RemoveObjectSkillCommand(
+                data_, db_path_, object_template, skill_id, refresh_cb);
+            undo_stack_->push(cmd);
+            object_skills_panel_->refresh();
+            if (current_skill_id_ == skill_id)
+                node_editor_->show_skill_objects(skill_id, data_);
+            statusBar()->showMessage(
+                QString("Removed skill %1 from LOT %2").arg(skill_id).arg(object_template));
+        } catch (const std::exception& e) {
+            QMessageBox::warning(this, "Error", e.what());
+        }
+    });
+
+    connect(object_skills_panel_, &ObjectSkillsPanel::object_skill_cast_type_changed,
+            this, [this, refresh_cb](int object_template, int skill_id,
+                                      int old_cast_on_type, int new_cast_on_type) {
+        if (db_path_.empty()) return;
+        try {
+            update_object_skill_cast_type(data_, db_path_,
+                                          object_template, skill_id, new_cast_on_type);
+            auto* cmd = new EditObjectSkillCastTypeCommand(
+                data_, db_path_, object_template, skill_id,
+                old_cast_on_type, new_cast_on_type, refresh_cb);
+            undo_stack_->push(cmd);
+            object_skills_panel_->refresh();
+            statusBar()->showMessage(
+                QString("Changed castOnType for skill %1 on LOT %2 to %3")
+                    .arg(skill_id).arg(object_template).arg(new_cast_on_type));
+        } catch (const std::exception& e) {
+            QMessageBox::warning(this, "Error", e.what());
+        }
+    });
+
     main_splitter->addWidget(right_splitter);
 
     // Splitter proportions: 200, 700, 500
@@ -527,6 +603,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 void MainWindow::refresh_ui(int select_behavior_id) {
     refreshing_ = true;
     populate_skill_list();
+    object_skills_panel_->refresh();
     if (current_skill_id_ > 0) {
         bool skill_exists = false;
         for (const auto& s : data_.skills)
@@ -564,6 +641,7 @@ void MainWindow::load_database(const std::string& path) {
     }
 
     node_editor_->set_data(&data_);
+    object_skills_panel_->set_data(&data_);
     populate_skill_list();
     statusBar()->showMessage(
         QString("Loaded %1 skills, %2 behaviors, %3 parameters, %4 types")

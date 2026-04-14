@@ -45,6 +45,7 @@ add_executable(skill_editor
     src/param_delegate.cpp src/param_delegate.h
     src/db_source.cpp src/db_source.h
     src/undo_commands.cpp src/undo_commands.h
+    src/object_skills_panel.cpp src/object_skills_panel.h
 )
 target_link_libraries(skill_editor PRIVATE
     Qt6::Widgets SQLite::SQLite3

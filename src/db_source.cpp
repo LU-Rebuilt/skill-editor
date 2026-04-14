@@ -159,6 +159,7 @@ CdClientData load_from_sqlite(const std::string& path) {
             os.skill_id = sqlite3_column_int(stmt.get(), 1);
             os.cast_on_type = sqlite3_column_int(stmt.get(), 2);
             data.skill_objects[os.skill_id].push_back(os);
+            data.object_skills[os.object_template].push_back(os);
         }
     }
 
@@ -453,6 +454,86 @@ void delete_parameter(CdClientData& data, const std::string& db_path,
             vec.end());
         if (vec.empty()) data.params.erase(it);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Object-skill CRUD
+// ---------------------------------------------------------------------------
+
+void insert_object_skill(CdClientData& data, const std::string& db_path,
+                         const ObjectSkill& os) {
+    sqlite3* raw_db = nullptr;
+    sqlite3_open(db_path.c_str(), &raw_db);
+    SqliteDb db(raw_db);
+
+    auto stmt = prepare(db.get(),
+        "INSERT INTO ObjectSkills (objectTemplate, skillID, castOnType) VALUES (?, ?, ?)");
+    sqlite3_bind_int(stmt.get(), 1, os.object_template);
+    sqlite3_bind_int(stmt.get(), 2, os.skill_id);
+    sqlite3_bind_int(stmt.get(), 3, os.cast_on_type);
+    sqlite3_step(stmt.get());
+
+    data.skill_objects[os.skill_id].push_back(os);
+    data.object_skills[os.object_template].push_back(os);
+}
+
+void delete_object_skill(CdClientData& data, const std::string& db_path,
+                         int object_template, int skill_id) {
+    sqlite3* raw_db = nullptr;
+    sqlite3_open(db_path.c_str(), &raw_db);
+    SqliteDb db(raw_db);
+
+    auto stmt = prepare(db.get(),
+        "DELETE FROM ObjectSkills WHERE objectTemplate = ? AND skillID = ?");
+    sqlite3_bind_int(stmt.get(), 1, object_template);
+    sqlite3_bind_int(stmt.get(), 2, skill_id);
+    sqlite3_step(stmt.get());
+
+    // Remove from skill_objects
+    auto it = data.skill_objects.find(skill_id);
+    if (it != data.skill_objects.end()) {
+        auto& vec = it->second;
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+            [&](const auto& o) { return o.object_template == object_template; }),
+            vec.end());
+        if (vec.empty()) data.skill_objects.erase(it);
+    }
+
+    // Remove from object_skills
+    auto it2 = data.object_skills.find(object_template);
+    if (it2 != data.object_skills.end()) {
+        auto& vec = it2->second;
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+            [&](const auto& o) { return o.skill_id == skill_id; }),
+            vec.end());
+        if (vec.empty()) data.object_skills.erase(it2);
+    }
+}
+
+void update_object_skill_cast_type(CdClientData& data, const std::string& db_path,
+                                   int object_template, int skill_id, int new_cast_on_type) {
+    sqlite3* raw_db = nullptr;
+    sqlite3_open(db_path.c_str(), &raw_db);
+    SqliteDb db(raw_db);
+
+    auto stmt = prepare(db.get(),
+        "UPDATE ObjectSkills SET castOnType = ? WHERE objectTemplate = ? AND skillID = ?");
+    sqlite3_bind_int(stmt.get(), 1, new_cast_on_type);
+    sqlite3_bind_int(stmt.get(), 2, object_template);
+    sqlite3_bind_int(stmt.get(), 3, skill_id);
+    sqlite3_step(stmt.get());
+
+    // Update in skill_objects
+    auto it = data.skill_objects.find(skill_id);
+    if (it != data.skill_objects.end())
+        for (auto& o : it->second)
+            if (o.object_template == object_template) { o.cast_on_type = new_cast_on_type; break; }
+
+    // Update in object_skills
+    auto it2 = data.object_skills.find(object_template);
+    if (it2 != data.object_skills.end())
+        for (auto& o : it2->second)
+            if (o.skill_id == skill_id) { o.cast_on_type = new_cast_on_type; break; }
 }
 
 // ---------------------------------------------------------------------------

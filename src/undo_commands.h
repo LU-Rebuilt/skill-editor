@@ -340,4 +340,67 @@ private:
     bool first_redo_ = true;
 };
 
+// ---------------------------------------------------------------------------
+// 14. AddObjectSkillCommand — assign a skill to an object
+// ---------------------------------------------------------------------------
+class AddObjectSkillCommand : public QUndoCommand {
+public:
+    AddObjectSkillCommand(CdClientData& data, const std::string& db_path,
+                          int object_template, int skill_id, int cast_on_type,
+                          RefreshCallback refresh);
+    void redo() override;
+    void undo() override;
+
+private:
+    CdClientData& data_;
+    std::string db_path_;
+    ObjectSkill os_;
+    RefreshCallback refresh_;
+    bool first_redo_ = true;
+};
+
+// ---------------------------------------------------------------------------
+// 15. RemoveObjectSkillCommand — remove a skill from an object
+// ---------------------------------------------------------------------------
+class RemoveObjectSkillCommand : public QUndoCommand {
+public:
+    RemoveObjectSkillCommand(CdClientData& data, const std::string& db_path,
+                             int object_template, int skill_id,
+                             RefreshCallback refresh);
+    void redo() override;
+    void undo() override;
+
+private:
+    CdClientData& data_;
+    std::string db_path_;
+    ObjectSkill snapshot_;
+    RefreshCallback refresh_;
+    bool first_redo_ = true;
+};
+
+// ---------------------------------------------------------------------------
+// 16. EditObjectSkillCastTypeCommand — change castOnType for an assignment
+// ---------------------------------------------------------------------------
+class EditObjectSkillCastTypeCommand : public QUndoCommand {
+public:
+    EditObjectSkillCastTypeCommand(CdClientData& data, const std::string& db_path,
+                                   int object_template, int skill_id,
+                                   int old_cast_on_type, int new_cast_on_type,
+                                   RefreshCallback refresh);
+    void redo() override;
+    void undo() override;
+    int id() const override { return 2; }
+    bool mergeWith(const QUndoCommand* other) override;
+
+private:
+    CdClientData& data_;
+    std::string db_path_;
+    int object_template_;
+    int skill_id_;
+    int old_cast_on_type_;
+    int new_cast_on_type_;
+    RefreshCallback refresh_;
+    bool first_redo_ = true;
+};
+
 } // namespace skill_editor

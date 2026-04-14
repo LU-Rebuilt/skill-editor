@@ -5,6 +5,7 @@
 #include "behavior_model.h"
 #include "tree_scene.h"
 #include "node_editor.h"
+#include "object_skills_panel.h"
 
 #include <QMainWindow>
 #include <QTreeView>
@@ -71,6 +72,9 @@ private:
     QUndoStack* undo_stack_;
     QDockWidget* undo_dock_;
     QUndoView* undo_view_;
+
+    // Object skills panel
+    ObjectSkillsPanel* object_skills_panel_;
 };
 
 } // namespace skill_editor

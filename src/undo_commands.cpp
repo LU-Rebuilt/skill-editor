@@ -658,4 +658,95 @@ void RemoveDynamicParamCommand::undo() {
     if (refresh_) refresh_(behavior_id_);
 }
 
+// ===========================================================================
+// 14. AddObjectSkillCommand
+// ===========================================================================
+
+AddObjectSkillCommand::AddObjectSkillCommand(
+    CdClientData& data, const std::string& db_path,
+    int object_template, int skill_id, int cast_on_type,
+    RefreshCallback refresh)
+    : QUndoCommand(QString("Add skill %1 to LOT %2").arg(skill_id).arg(object_template))
+    , data_(data), db_path_(db_path), refresh_(refresh)
+{
+    os_.object_template = object_template;
+    os_.skill_id = skill_id;
+    os_.cast_on_type = cast_on_type;
+}
+
+void AddObjectSkillCommand::redo() {
+    insert_object_skill(data_, db_path_, os_);
+    if (refresh_) refresh_(0);
+}
+
+void AddObjectSkillCommand::undo() {
+    delete_object_skill(data_, db_path_, os_.object_template, os_.skill_id);
+    if (refresh_) refresh_(0);
+}
+
+// ===========================================================================
+// 15. RemoveObjectSkillCommand
+// ===========================================================================
+
+RemoveObjectSkillCommand::RemoveObjectSkillCommand(
+    CdClientData& data, const std::string& db_path,
+    int object_template, int skill_id,
+    RefreshCallback refresh)
+    : QUndoCommand(QString("Remove skill %1 from LOT %2").arg(skill_id).arg(object_template))
+    , data_(data), db_path_(db_path), refresh_(refresh)
+{
+    // Snapshot the current castOnType for undo restoration
+    snapshot_.object_template = object_template;
+    snapshot_.skill_id = skill_id;
+    snapshot_.cast_on_type = 0;
+    auto it = data.object_skills.find(object_template);
+    if (it != data.object_skills.end())
+        for (const auto& o : it->second)
+            if (o.skill_id == skill_id) { snapshot_.cast_on_type = o.cast_on_type; break; }
+}
+
+void RemoveObjectSkillCommand::redo() {
+    delete_object_skill(data_, db_path_, snapshot_.object_template, snapshot_.skill_id);
+    if (refresh_) refresh_(0);
+}
+
+void RemoveObjectSkillCommand::undo() {
+    insert_object_skill(data_, db_path_, snapshot_);
+    if (refresh_) refresh_(0);
+}
+
+// ===========================================================================
+// 16. EditObjectSkillCastTypeCommand
+// ===========================================================================
+
+EditObjectSkillCastTypeCommand::EditObjectSkillCastTypeCommand(
+    CdClientData& data, const std::string& db_path,
+    int object_template, int skill_id,
+    int old_cast_on_type, int new_cast_on_type,
+    RefreshCallback refresh)
+    : QUndoCommand(QString("Change castOnType for skill %1 on LOT %2")
+          .arg(skill_id).arg(object_template))
+    , data_(data), db_path_(db_path)
+    , object_template_(object_template), skill_id_(skill_id)
+    , old_cast_on_type_(old_cast_on_type), new_cast_on_type_(new_cast_on_type)
+    , refresh_(refresh) {}
+
+void EditObjectSkillCastTypeCommand::redo() {
+    if (first_redo_) { first_redo_ = false; return; }
+    update_object_skill_cast_type(data_, db_path_, object_template_, skill_id_, new_cast_on_type_);
+    if (refresh_) refresh_(0);
+}
+
+void EditObjectSkillCastTypeCommand::undo() {
+    update_object_skill_cast_type(data_, db_path_, object_template_, skill_id_, old_cast_on_type_);
+    if (refresh_) refresh_(0);
+}
+
+bool EditObjectSkillCastTypeCommand::mergeWith(const QUndoCommand* other) {
+    auto* o = static_cast<const EditObjectSkillCastTypeCommand*>(other);
+    if (o->object_template_ != object_template_ || o->skill_id_ != skill_id_) return false;
+    new_cast_on_type_ = o->new_cast_on_type_;
+    return true;
+}
+
 } // namespace skill_editor
