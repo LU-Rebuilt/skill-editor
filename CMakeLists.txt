@@ -59,16 +59,21 @@ add_custom_command(TARGET skill_editor POST_BUILD
         $<TARGET_FILE_DIR:skill_editor>/behavior_schema.json
 )
 
-# Embed behavior_schema.json as a C++ byte array for fallback
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_schema.json SCHEMA_JSON_RAW)
-string(LENGTH "${SCHEMA_JSON_RAW}" SCHEMA_JSON_LEN)
+# Embed behavior_schema.json as a C byte array for fallback
+# (MSVC has a 16KB raw string literal limit, so we use a byte array instead)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_schema.json SCHEMA_HEX HEX)
+string(LENGTH "${SCHEMA_HEX}" SCHEMA_HEX_LEN)
+math(EXPR SCHEMA_BYTE_LEN "${SCHEMA_HEX_LEN} / 2")
+# Convert hex pairs to 0xNN, comma-separated
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," SCHEMA_BYTES "${SCHEMA_HEX}")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/embedded_schema.h
     "#pragma once\n"
     "#include <cstddef>\n"
     "// Auto-generated — do not edit. Embedded from behavior_schema.json.\n"
-    "inline const char* const EMBEDDED_BEHAVIOR_SCHEMA = R\"JSON_EMBED(\n"
-    "${SCHEMA_JSON_RAW}"
-    ")JSON_EMBED\";\n"
-    "inline const size_t EMBEDDED_BEHAVIOR_SCHEMA_LEN = ${SCHEMA_JSON_LEN};\n"
+    "static const unsigned char EMBEDDED_BEHAVIOR_SCHEMA_DATA[] = {\n"
+    "${SCHEMA_BYTES}\n"
+    "};\n"
+    "inline const char* const EMBEDDED_BEHAVIOR_SCHEMA = reinterpret_cast<const char*>(EMBEDDED_BEHAVIOR_SCHEMA_DATA);\n"
+    "inline const size_t EMBEDDED_BEHAVIOR_SCHEMA_LEN = ${SCHEMA_BYTE_LEN};\n"
 )
 target_include_directories(skill_editor PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
