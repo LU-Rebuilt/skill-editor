@@ -109,7 +109,7 @@ jobs:
           </plist>
           PLIST
           macdeployqt "$APP" -verbose=1
-          tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
+          cd dist && zip -r ../${{ matrix.artifact }}.zip SkillEditor.app
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
