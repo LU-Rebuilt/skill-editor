@@ -82,11 +82,33 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Package (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
         run: |
           mkdir -p dist
-          cp build/skill_editor dist/ 2>/dev/null || true
+          cp build/skill_editor dist/
+          tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          APP=dist/SkillEditor.app
+          mkdir -p "$APP/Contents/MacOS"
+          cp build/skill_editor "$APP/Contents/MacOS/skill_editor"
+          cat > "$APP/Contents/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>skill_editor</string>
+            <key>CFBundleName</key><string>LU Skill Editor</string>
+            <key>CFBundleIdentifier</key><string>com.lu-rebuilt.skill-editor</string>
+            <key>CFBundleVersion</key><string>1.0</string>
+          </dict>
+          </plist>
+          PLIST
+          macdeployqt "$APP" -verbose=1
           tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
 
       - name: Package (Windows)
