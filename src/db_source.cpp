@@ -2,6 +2,9 @@
 #include "embedded_schema.h"
 
 #include <sqlite3.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include <nlohmann/json.hpp>
 #include <QMessageBox>
 #include <QTimer>
@@ -762,12 +765,23 @@ CdClientData load_cdclient(const std::string& path) {
 // Find behavior_schema.json next to the executable
 static std::string find_schema_path() {
     namespace fs = std::filesystem;
-    // Try next to executable
-    auto exe_dir = fs::path("/proc/self/exe").parent_path();
-    // On Linux /proc/self/exe is a symlink — resolve it
+    fs::path exe_dir;
+
+#ifdef __APPLE__
+    // macOS: use _NSGetExecutablePath
+    char buf[4096];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) == 0) {
+        std::error_code ec;
+        exe_dir = fs::canonical(buf, ec).parent_path();
+    }
+#else
+    // Linux: /proc/self/exe
+    exe_dir = fs::path("/proc/self/exe").parent_path();
     std::error_code ec;
     auto resolved = fs::read_symlink("/proc/self/exe", ec);
     if (!ec) exe_dir = resolved.parent_path();
+#endif
 
     auto candidate = exe_dir / "behavior_schema.json";
     if (fs::exists(candidate)) return candidate.string();
