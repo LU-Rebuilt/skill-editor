@@ -251,6 +251,13 @@ int clone_subtree(CdClientData& data, const std::string& db_path, int source_beh
     sqlite3_open(db_path.c_str(), &raw_db);
     SqliteDb db(raw_db);
 
+    // Snapshot the pre-clone behavior ID set so that plain numeric parameter
+    // values (angle, max_range, dir_force, etc.) are never mistaken for child
+    // behavior references just because a freshly-allocated clone ID happens to
+    // collide with them.
+    std::unordered_set<int> original_behavior_ids;
+    for (const auto& kv : data.behaviors) original_behavior_ids.insert(kv.first);
+
     // Map old IDs to new IDs
     std::unordered_map<int, int> id_map;
     std::function<int(int)> clone_node = [&](int old_id) -> int {
@@ -283,13 +290,15 @@ int clone_subtree(CdClientData& data, const std::string& db_path, int source_beh
         new_bt.effect_handle = eff_handle;
         data.behaviors[new_id] = new_bt;
 
-        // Copy parameters, recursively cloning child behavior references
+        // Copy parameters, recursively cloning child behavior references.
+        // Use original_behavior_ids (pre-clone snapshot) to distinguish real
+        // child references from plain numeric values like angle or timeout_ms.
         auto pit = data.params.find(old_id);
         if (pit != data.params.end()) {
             for (const auto& p : pit->second) {
                 double new_val = p.value;
                 int ref = static_cast<int>(p.value);
-                if (ref > 0 && data.behaviors.count(ref)) {
+                if (ref > 0 && original_behavior_ids.count(ref)) {
                     new_val = static_cast<double>(clone_node(ref));
                 }
                 {
